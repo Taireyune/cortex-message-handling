@@ -18,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 ## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+find_package(OpenCV REQUIRED)
 
 ## Generate messages in the 'msg' folder
 add_message_files(
@@ -59,9 +59,9 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${SPINNAKER_INCLUDE_DIR}
+  ${OpenCV_INCLUDE_DIRS}
 )
 link_directories( ${SPINNAKER_LIB_DIR} )
-set (LIBS Spinnaker)
 
 ## build debug executable
 add_executable(relay_debug src/relay_debug.cpp)
@@ -75,5 +75,5 @@ add_dependencies(simulator_relay ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EX
 
 ## build video feed
 add_executable(video_feed src/video_feed.cpp)
-target_link_libraries(video_feed ${LIBS} ${catkin_LIBRARIES})
+target_link_libraries(video_feed Spinnaker ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_dependencies(video_feed ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
