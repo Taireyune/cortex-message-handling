@@ -77,3 +77,13 @@ add_dependencies(simulator_relay ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EX
 add_executable(video_feed src/video_feed.cpp)
 target_link_libraries(video_feed Spinnaker ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_dependencies(video_feed ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+## build blackfly_binocular_relay library
+#add_library(blackfly_binocular_relay SHARED src/blackfly_binocular_relay.cpp)
+#add_dependencies(blackfly_binocular_relay ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+#target_link_libraries(blackfly_binocular_relay Spinnaker ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+
+## build live_binocular_relay executable
+add_executable(live_binocular_relay src/live_binocular_relay.cpp src/blackfly_binocular_relay.cpp)
+target_link_libraries(live_binocular_relay Spinnaker ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+add_dependencies(live_binocular_relay ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
