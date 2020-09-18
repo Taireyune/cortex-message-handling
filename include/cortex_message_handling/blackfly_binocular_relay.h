@@ -9,6 +9,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/Image.h>
+#include <chrono>
 
 #include "cortex_message_handling/BinocularFeed.h"
 
@@ -32,7 +33,8 @@ public:
 
 private:
     // minimum milliseconds before next image
-    const int grab_image_timeout_ = 150;
+    const int grab_image_timeout_ = 30;
+    double exposure_time_ = 3000.0;
 
     // cv variables
     cv::Rect cropROI_;
@@ -67,7 +69,7 @@ private:
     SystemPtr system;
     CameraList camList;
     unsigned int numCameras;
-    vector<Blackfly_trigger_acquisition> camera_objects_;
+    Blackfly_trigger_acquisition* camera_leftside_;
 
     // ros objects
     ros::NodeHandle n;

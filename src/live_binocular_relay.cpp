@@ -6,16 +6,34 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "Live_binocular_relay");
     
     // initialize nodes and camera
-    Blackfly_binocular_relay relay;
+    Blackfly_binocular_relay* relay = new Blackfly_binocular_relay();
     
-    ros::Rate loop_rate(60);
+    // set ros loop rate
+    const int rate = 60;
+    ros::Rate loop_rate(rate);
+
+    // timer
+    chrono::steady_clock::time_point time_now = chrono::steady_clock::now();
 
     int count = 0;
-    while (true)
+    // while (ros::ok())
+    while (count < 300)
     {
-        cout << "[live_binocular_relay.main] loop count: " << count << endl;
-        relay.update_attributes();
+        // timer
+        cout << "Framerate = " 
+            << 1000000.0 / chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - time_now).count() 
+            << " hz" << endl;
+        time_now = chrono::steady_clock::now();
+
+        // cout << "[live_binocular_relay.main] loop count: " << count << endl;
+        relay->update_attributes();
         count++;
+
+        if (count % rate == 0)
+        {
+            cout << "[live_binocular_relay.main] loop count: " << count << endl;
+            // cout << "[live_binocular_relay.main] frame rate: " << time_now << endl;
+        }
 
         // for opencv
         if (cv::waitKey(10) == 27)
@@ -25,7 +43,7 @@ int main(int argc, char **argv)
         }
         loop_rate.sleep();
     }
-    relay.release_cameras();
+    relay->release_cameras();
 
     return 0;
 }

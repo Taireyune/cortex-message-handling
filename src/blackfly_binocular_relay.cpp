@@ -9,7 +9,8 @@ Blackfly_trigger_acquisition::Blackfly_trigger_acquisition(CameraPtr camera_poin
     cropROI_ = cv::Rect(188, 0, 1240, 1240);
 
     // resize to 512 x 512
-    cv_image = cv::Mat(cv::Size(512, 512), CV_8UC3, cv::Scalar(0));
+    // cv_image = cv::Mat(cv::Size(512, 512), CV_8UC3, cv::Scalar(0));
+    cv_image = cv::Mat(cv::Size(1240, 1240), CV_8UC3, cv::Scalar(0));
 
     try
     {      
@@ -48,6 +49,57 @@ int Blackfly_trigger_acquisition::configure_camera_settings()
     {
         INodeMap & nodeMap = pCam_->GetNodeMap();
         
+        //
+        // Turn off automatic exposure mode
+        //
+        // *** NOTES ***
+        // Automatic exposure prevents the manual configuration of exposure
+        // time and needs to be turned off.
+        //
+        // *** LATER ***
+        // Exposure time can be set automatically or manually as needed. This
+        // example turns automatic exposure off to set it manually and back
+        // on in order to return the camera to its default state.
+        //
+        CEnumerationPtr ptrExposureAuto = nodeMap.GetNode("ExposureAuto");
+        if (!IsAvailable(ptrExposureAuto) || !IsWritable(ptrExposureAuto))
+        {
+            cout << "Unable to disable automatic exposure (node retrieval). Aborting..." << endl << endl;
+            return -1;
+        }
+        CEnumEntryPtr ptrExposureAutoOff = ptrExposureAuto->GetEntryByName("Off");
+        if (!IsAvailable(ptrExposureAutoOff) || !IsReadable(ptrExposureAutoOff))
+        {
+            cout << "Unable to disable automatic exposure (enum entry retrieval). Aborting..." << endl << endl;
+            return -1;
+        }
+        ptrExposureAuto->SetIntValue(ptrExposureAutoOff->GetValue());
+        cout << "Automatic exposure disabled..." << endl;
+        //
+        // Set exposure time manually; exposure time recorded in microseconds
+        //
+        // *** NOTES ***
+        // The node is checked for availability and writability prior to the
+        // setting of the node. Further, it is ensured that the desired exposure
+        // time does not exceed the maximum. Exposure time is counted in
+        // microseconds. This information can be found out either by
+        // retrieving the unit with the GetUnit() method or by checking SpinView.
+        //
+        CFloatPtr ptrExposureTime = nodeMap.GetNode("ExposureTime");
+        if (!IsAvailable(ptrExposureTime) || !IsWritable(ptrExposureTime))
+        {
+            cout << "Unable to set exposure time. Aborting..." << endl << endl;
+            return -1;
+        }
+        // Ensure desired exposure time does not exceed the maximum
+        const double exposureTimeMax = ptrExposureTime->GetMax();
+        if (exposure_time_ > exposureTimeMax)
+        {
+            exposure_time_ = exposureTimeMax;
+        }
+        ptrExposureTime->SetValue(exposure_time_);
+        cout << std::fixed << "Exposure time set to " << exposure_time_ << " us..." << endl;
+
         //
         ///// Ensure trigger mode off
         //
@@ -97,8 +149,8 @@ int Blackfly_trigger_acquisition::configure_camera_settings()
         ptrTriggerSource->SetIntValue(ptrTriggerSourceSoftware->GetValue());
         cout << "Trigger source set to software..." << endl;
 
-        //
-        ///// Set TriggerSelector to TriggerOverlap
+        
+        /// Set TriggerSelector to TriggerOverlap
         //
         // *** NOTES ***
         // For this example, the trigger selector should be set to frame start.
@@ -128,7 +180,6 @@ int Blackfly_trigger_acquisition::configure_camera_settings()
         // Once the appropriate trigger source has been set, turn trigger mode
         // on in order to retrieve images using the trigger.
         //
-
         CEnumEntryPtr ptrTriggerModeOn = ptrTriggerMode->GetEntryByName("On");
         if (!IsAvailable(ptrTriggerModeOn) || !IsReadable(ptrTriggerModeOn))
         {
@@ -168,10 +219,12 @@ int Blackfly_trigger_acquisition::configure_camera_settings()
             cout << "Unable to obtain trigger pointer. Aborting..." << endl;
             return -1;
         }
+        
         cout << "Software trigger pointer obtained." << endl;
 
         // Begin acquiring images
         pCam_->BeginAcquisition();
+        ptrSoftwareTriggerCommand_->Execute(); // trigger once so there is something in the buffer
         cout << "Begin acquiring images..." << endl;
     }
     catch (Spinnaker::Exception& e)
@@ -205,7 +258,7 @@ cv::Mat Blackfly_trigger_acquisition::grab_frame()
     }
     
     // Release image
-    pResultImage->Release();
+    // pResultImage->Release();
     
     // cout << "[Blackfly_trigger_acquisition::grab_frame] Image obtained." << endl;
     return cv_image;
@@ -221,17 +274,23 @@ void Blackfly_trigger_acquisition::convert_to_cv_image(ImagePtr pImage)
     unsigned int rowsize = convertedImage->GetWidth();
     unsigned int colsize = convertedImage->GetHeight();
     
-    //image data contains padding. When allocating Mat container size, you need to account for the X,Y image data padding.
-    cv::Mat img;
-    img = cv::Mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
+    /// image data contains padding. When allocating Mat container size, you need to account for the X,Y image data padding.
     
+    // cv::Mat img;
+    // img = cv::Mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
+    
+    // // crop, cropROI defined in header
+    // img = img(cropROI_);
+
+    // // resize image
+    // cv::resize(img, cv_image, cv_image.size());
+
+    cv::Mat mat = cv::Mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
     // crop, cropROI defined in header
-    img = img(cropROI_);
+    cv_image = mat(cropROI_).clone();
+    // cv_image = mat(cropROI_);
 
-    // resize image
-    cv::resize(img, cv_image, cv_image.size());
 }
-
 
 Blackfly_trigger_acquisition::~Blackfly_trigger_acquisition()
 {
@@ -268,7 +327,29 @@ int Blackfly_trigger_acquisition::release_camera()
 
         ptrTriggerMode->SetIntValue(ptrTriggerModeOff->GetValue());
 
-        cout << "Trigger mode disabled..." << endl << endl;
+        cout << "Trigger mode disabled..." << endl;
+
+        //
+        // Turn automatic exposure back on
+        //
+        // *** NOTES ***
+        // Automatic exposure is turned on in order to return the camera to its
+        // default state.
+        //
+        CEnumerationPtr ptrExposureAuto = nodeMap.GetNode("ExposureAuto");
+        if (!IsAvailable(ptrExposureAuto) || !IsWritable(ptrExposureAuto))
+        {
+            cout << "Unable to enable automatic exposure (node retrieval). Non-fatal error..." << endl << endl;
+            return -1;
+        }
+        CEnumEntryPtr ptrExposureAutoContinuous = ptrExposureAuto->GetEntryByName("Continuous");
+        if (!IsAvailable(ptrExposureAutoContinuous) || !IsReadable(ptrExposureAutoContinuous))
+        {
+            cout << "Unable to enable automatic exposure (enum entry retrieval). Non-fatal error..." << endl << endl;
+            return -1;
+        }
+        ptrExposureAuto->SetIntValue(ptrExposureAutoContinuous->GetValue());
+        cout << "Automatic exposure enabled..." << endl;
     }
     catch (Spinnaker::Exception& e)
     {
@@ -277,6 +358,7 @@ int Blackfly_trigger_acquisition::release_camera()
     }
 
     pCam_->DeInit();
+    pCam_ = nullptr;
     return 0;
 }
 
@@ -305,22 +387,27 @@ Blackfly_binocular_relay::Blackfly_binocular_relay()
     }
 
     // initialize blackfly cam objects
-    for (unsigned int i = 0; i < numCameras; i++)
-    {
-        camera_objects_.push_back(Blackfly_trigger_acquisition(camList.GetByIndex(i)));
-    }
+    // for (unsigned int i = 0; i < numCameras; i++)
+    // {
+    //     camera_objects_.push_back(Blackfly_trigger_acquisition(camList.GetByIndex(i)));
+    // }
+    camera_leftside_ = new Blackfly_trigger_acquisition(camList.GetByIndex(0));
 }
 
 Blackfly_binocular_relay::~Blackfly_binocular_relay()
 {
+    cout << "[Blackfly_binocular_relay::~Blackfly_binocular_relay] Relay object terminated." << endl;
 }
 
 int Blackfly_binocular_relay::update_attributes()
 {
     // fire trigger
-    camera_objects_[0].fire_trigger(); 
-    
-    cv::imshow( "Display window", camera_objects_[0].grab_frame());  
+    // camera_objects_[0].fire_trigger(); 
+    // cv::Mat frame = camera_objects_[0].grab_frame();
+
+    camera_leftside_->fire_trigger(); 
+    cv::Mat frame = camera_leftside_->grab_frame();
+    cv::imshow( "Display window", frame);  
     ros::spinOnce();
     return 0;
 }
@@ -330,11 +417,13 @@ int Blackfly_binocular_relay::release_cameras()
     try
     {
         // camera cleanup
-        for (unsigned int i = 0; i < numCameras; i++)
-        {
-            camera_objects_[i].release_camera();
-        }
-        camera_objects_.clear();
+        // for (unsigned int i = 0; i < numCameras; i++)
+        // {
+        //     camera_objects_[i].release_camera();
+        // }
+        // camera_objects_.clear();
+
+        camera_leftside_->release_camera();
 
         camList.Clear();
         system->ReleaseInstance();
