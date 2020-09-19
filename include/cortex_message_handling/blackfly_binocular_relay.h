@@ -10,6 +10,7 @@
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/Image.h>
 #include <chrono>
+#include <thread>
 
 #include "cortex_message_handling/BinocularFeed.h"
 
@@ -33,7 +34,7 @@ public:
 
 private:
     // minimum milliseconds before next image
-    const int grab_image_timeout_ = 30;
+    const int grab_image_timeout_ = 1000;
     double exposure_time_ = 3000.0;
 
     // cv variables
@@ -65,7 +66,13 @@ public:
     // cleanup
     int release_cameras();
 
+    // multithread
+    void run_multithread(int rate);
+
+
 private:
+    bool start_trigger_loop = false;
+    const int loop_count = 1000;
     SystemPtr system;
     CameraList camList;
     unsigned int numCameras;
@@ -74,6 +81,10 @@ private:
     // ros objects
     ros::NodeHandle n;
     ros::Publisher video_feed_pub;
+
+    // multi threading
+    void trigger_thread(int rate);
+    void image_process_thread(int rate);
 };
 
 #endif

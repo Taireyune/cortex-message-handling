@@ -258,7 +258,7 @@ cv::Mat Blackfly_trigger_acquisition::grab_frame()
     }
     
     // Release image
-    // pResultImage->Release();
+    pResultImage->Release();
     
     // cout << "[Blackfly_trigger_acquisition::grab_frame] Image obtained." << endl;
     return cv_image;
@@ -435,4 +435,81 @@ int Blackfly_binocular_relay::release_cameras()
         cerr << e.what() << '\n';
         return -1;
     }  
+}
+void Blackfly_binocular_relay::run_multithread(int rate)
+{
+    thread trigger_loop(&Blackfly_binocular_relay::trigger_thread, this, rate);
+    thread image_loop(&Blackfly_binocular_relay::image_process_thread, this, rate);
+
+    trigger_loop.join();
+    image_loop.join();
+}
+
+void Blackfly_binocular_relay::trigger_thread(int rate)
+{
+    ros::Rate loop_rate(rate);
+    chrono::steady_clock::time_point time_now = chrono::steady_clock::now();
+
+    int count = 0;
+
+    // wait for image_process_thread to finish initializing
+    while (!start_trigger_loop)
+    {
+        this_thread::sleep_for(std::chrono::microseconds(100));
+    }
+    while (count < loop_count)
+    {
+        // timer
+        cout << "Trigger rate = " 
+            << 1000000.0 / chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - time_now).count() 
+            << " hz" << endl;
+        time_now = chrono::steady_clock::now();
+
+        camera_leftside_->fire_trigger();
+        count++;
+    
+        // for opencv
+        if (cv::waitKey(10) == 27)
+        {
+            cout << "[Blackfly_binocular_relay::trigger_thread] exit command." << endl;
+            break;
+        }        
+
+        loop_rate.sleep();   
+    }  
+
+    cout << "[Blackfly_binocular_relay::trigger_thread] Thread finished." << endl;  
+}
+
+void Blackfly_binocular_relay::image_process_thread(int rate)
+{
+    ros::Rate loop_rate(rate);
+    chrono::steady_clock::time_point time_now = chrono::steady_clock::now();
+
+    int count = 0;
+    start_trigger_loop = true;
+    while (count < loop_count)
+    {
+        // timer
+        // cout << "Framerate = " 
+        //     << 1000000.0 / chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - time_now).count() 
+        //     << " hz" << endl;
+        // time_now = chrono::steady_clock::now();
+
+        cv::Mat frame = camera_leftside_->grab_frame();
+        cv::imshow("Display window", frame);
+
+        count++;
+
+        // for opencv
+        if (cv::waitKey(10) == 27)
+        {
+            cout << "[Blackfly_binocular_relay::image_process_thread] exit command." << endl;
+            break;
+        }
+
+        loop_rate.sleep();          
+    }
+
+    cout << "[Blackfly_binocular_relay::image_process_thread] Thread finished." << endl;  
 }
