@@ -22,8 +22,10 @@ using namespace std;
 ///// blackfly_trigger_acquisition.cpp
 class Blackfly_trigger_acquisition
 {
-public:
+public:   
     Blackfly_trigger_acquisition(CameraPtr camera_pointer);
+    Blackfly_trigger_acquisition() = delete;
+    
     ~Blackfly_trigger_acquisition();
 
     int fire_trigger();
@@ -53,30 +55,43 @@ private:
     int configure_camera_settings();
 };
 
+class Blackfly_camera_finder
+{
+public:
+    Blackfly_camera_finder();
+    ~Blackfly_camera_finder();
+
+    CameraPtr get_camera(int index);
+
+private:
+    SystemPtr system;
+    CameraList camList;
+    unsigned int numCameras;
+};
+
 class Blackfly_binocular_relay
 {
 public:
-    Blackfly_binocular_relay();
+    Blackfly_binocular_relay() = delete;
+    Blackfly_binocular_relay(CameraPtr camera_pointer);
     ~Blackfly_binocular_relay();
 
     // methods
     // trigger and publish 
     int update_attributes();
 
+    // run loops
+    void run_multithread(int rate);
+    void run_singlethread(int rate);
+
     // cleanup
     int release_cameras();
-
-    // multithread
-    void run_multithread(int rate);
-
 
 private:
     bool start_trigger_loop = false;
     const int loop_count = 1000;
-    SystemPtr system;
-    CameraList camList;
-    unsigned int numCameras;
-    Blackfly_trigger_acquisition* camera_leftside_;
+
+    Blackfly_trigger_acquisition camera_leftside_;
 
     // ros objects
     ros::NodeHandle n;
