@@ -4,13 +4,10 @@
 #include <Spinnaker.h>
 #include <SpinGenApi/SpinnakerGenApi.h>
 #include <ros/ros.h>
-#include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
-#include <cv_bridge/cv_bridge.h>
-#include <image_transport/image_transport.h>
-#include <sensor_msgs/Image.h>
 #include <chrono>
 #include <thread>
+#include <zmq.hpp>
 
 #include "cortex_message_handling/BinocularFeed.h"
 
@@ -22,7 +19,29 @@ using namespace std;
 ///// blackfly_trigger_acquisition.cpp
 class Blackfly_trigger_acquisition
 {
-public:   
+/// *** attributes ***
+private: 
+    // minimum milliseconds before next image
+    const int grab_image_timeout_ = 1000;
+    double exposure_time_ = 5000.0;
+
+    /// cv variables
+    // input image size is 1616 x 1240, will be cropped to 1240 x 1240
+    cv::Rect cropROI_{188, 0, 1240, 1240};
+    cv::Mat cv_image_{cv::Size(1240, 1240), CV_8UC3, cv::Scalar(0)};
+
+    /// resize to 512 x 512
+    // cv_image_ = cv::Mat(cv::Size(512, 512), CV_8UC3, cv::Scalar(0));
+    int cv_image_size_ = cv_image_.total() * cv_image_.elemSize();
+    // byte* image_byte_stream;
+
+    // blackfly pointers
+    CameraPtr pCam_;
+    INodeMap* nodeMap_;
+    CCommandPtr ptrSoftwareTriggerCommand_;
+
+/// *** methods ***
+public:
     Blackfly_trigger_acquisition(CameraPtr camera_pointer);
     Blackfly_trigger_acquisition() = delete;
     
@@ -34,20 +53,10 @@ public:
     // cleanup
     int release_camera();
 
+    // access variables
+    const int cv_image_size();
+
 private:
-    // minimum milliseconds before next image
-    const int grab_image_timeout_ = 1000;
-    double exposure_time_ = 3000.0;
-
-    // cv variables
-    cv::Rect cropROI_;
-    cv::Mat cv_image;
-
-    // blackfly pointers
-    CameraPtr pCam_;
-    INodeMap* nodeMap_;
-    CCommandPtr ptrSoftwareTriggerCommand_;
-
     // image format conversion
     void convert_to_cv_image(ImagePtr pImage);
 
@@ -57,28 +66,52 @@ private:
 
 class Blackfly_camera_finder
 {
-public:
+/// *** attributes ***
+private: 
+    SystemPtr system;
+    CameraList camList;
+    unsigned int numCameras;
+
+/// *** methods ***
+public:   
     Blackfly_camera_finder();
     ~Blackfly_camera_finder();
 
     CameraPtr get_camera(int index);
-
-private:
-    SystemPtr system;
-    CameraList camList;
-    unsigned int numCameras;
 };
 
 class Blackfly_binocular_relay
 {
-public:
+/// *** attributes ***
+private:  
+    bool start_trigger_loop_ = false;
+    const int Loop_count_ = 1000;
+
+    Blackfly_trigger_acquisition camera_leftside_;
+
+    /// ros objects
+    /// left camera
+    ros::NodeHandle n_left_;
+    // ros::Publisher video_feed_leftside_pub_;
+    // image_transport::ImageTransport transporter_leftside_(n_left_);
+    // image_transport::Publisher video_feed_leftside_pub_;
+
+    /// right camera
+    /// to be added
+
+    /// zmq objects
+    zmq::context_t context_;
+    zmq::socket_t publisher_leftside_{context_, zmq::socket_type::pub};
+
+/// *** methods ***
+public:   
     Blackfly_binocular_relay() = delete;
     Blackfly_binocular_relay(CameraPtr camera_pointer);
     ~Blackfly_binocular_relay();
 
     // methods
     // trigger and publish 
-    int update_attributes();
+    // int update_attributes();
 
     // run loops
     void run_multithread(int rate);
@@ -88,18 +121,10 @@ public:
     int release_cameras();
 
 private:
-    bool start_trigger_loop = false;
-    const int loop_count = 1000;
-
-    Blackfly_trigger_acquisition camera_leftside_;
-
-    // ros objects
-    ros::NodeHandle n;
-    ros::Publisher video_feed_pub;
-
     // multi threading
     void trigger_thread(int rate);
     void image_process_thread(int rate);
+    void deallocator(void* data, void* hint);
 };
 
 #endif

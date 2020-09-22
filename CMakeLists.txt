@@ -4,9 +4,13 @@ project(cortex_message_handling)
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
 
+## Spinnaker include_directories
 set(PROJECT_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include" CACHE PATH "Project Include Directory")
 set(SPINNAKER_INCLUDE_DIR "/usr/include/spinnaker" CACHE PATH "Spinnaker Include Directory")
 set(SPINNAKER_LIB_DIR "/usr/lib" CACHE PATH "Spinnaker Libs Directory")
+
+#set(ZeroMQ_INCLUDE_DIR "/usr/include/zmq*" CACHE PATH "ZeroMQ Include Directory")
+#set(ZeroMQ_LIB_DIR "/usr/lib/x86_64-linux-gnu" CACHE PATH "ZeroMQ Libs Directory")
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -24,7 +28,6 @@ find_package(OpenCV REQUIRED)
 add_message_files(
   FILES
   CortexCommands.msg
-  BinocularFeed.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
@@ -60,8 +63,9 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${SPINNAKER_INCLUDE_DIR}
   ${OpenCV_INCLUDE_DIRS}
+  /usr/include
 )
-link_directories( ${SPINNAKER_LIB_DIR} )
+link_directories( ${SPINNAKER_LIB_DIR})
 
 ## build debug executable
 add_executable(relay_debug src/relay_debug.cpp)
@@ -74,9 +78,9 @@ target_link_libraries(simulator_relay ${catkin_LIBRARIES})
 add_dependencies(simulator_relay ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## build video feed
-add_executable(video_feed src/video_feed.cpp)
-target_link_libraries(video_feed Spinnaker ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
-add_dependencies(video_feed ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+#add_executable(video_feed src/video_feed.cpp)
+#target_link_libraries(video_feed Spinnaker ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+#add_dependencies(video_feed ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## build blackfly_binocular_relay library
 #add_library(blackfly_binocular_relay SHARED src/blackfly_binocular_relay.cpp)
@@ -85,5 +89,5 @@ add_dependencies(video_feed ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTE
 
 ## build live_binocular_relay executable
 add_executable(live_binocular_relay src/live_binocular_relay.cpp src/blackfly_binocular_relay.cpp)
-target_link_libraries(live_binocular_relay Spinnaker ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+target_link_libraries(live_binocular_relay Spinnaker ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} /usr/lib/x86_64-linux-gnu/libzmq.so)
 add_dependencies(live_binocular_relay ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})

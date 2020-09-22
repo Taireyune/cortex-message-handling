@@ -1,19 +1,18 @@
 #include "cortex_message_handling/blackfly_binocular_relay.h"
 
+///// ***Blackfly_trigger_acquisition***
+/// Object for each blackfly camera to acquire image with trigger
+
+///
+///// Constructor
+///
 Blackfly_trigger_acquisition::Blackfly_trigger_acquisition(CameraPtr camera_pointer)
 {
     cout << "[Blackfly_trigger_acquisition::Blackfly_trigger_acquisition] Instantiating..." << endl;
 
     int result = 0;
     pCam_ = camera_pointer;
-
-    // input image size is 1616 x 1240, will be cropped to 1240 x 1240
-    cropROI_ = cv::Rect(188, 0, 1240, 1240);
-
-    // resize to 512 x 512
-    // cv_image = cv::Mat(cv::Size(512, 512), CV_8UC3, cv::Scalar(0));
-    cv_image = cv::Mat(cv::Size(1240, 1240), CV_8UC3, cv::Scalar(0));
-
+   
     try
     {      
         pCam_->Init();
@@ -36,14 +35,16 @@ Blackfly_trigger_acquisition::Blackfly_trigger_acquisition(CameraPtr camera_poin
     cout << "[Blackfly_trigger_acquisition::Blackfly_trigger_acquisition] Instantiated." << endl;
 }
 
+///
 ///// configure camera settings
-// Set trigger to off
-// switch to TriggerOverlap
-// use software trigger
-// switch trigger backon
-//
-// select continuous acquisition
-// start acquisition
+///
+/// Set trigger to off
+/// switch to TriggerOverlap, ReadOut
+/// use software trigger
+/// switch trigger backon
+/// select continuous acquisition
+/// start acquisition
+///
 int Blackfly_trigger_acquisition::configure_camera_settings()
 {
     cout << endl << "*** CONFIGURING CAMERA ***" << endl << endl;
@@ -151,7 +152,7 @@ int Blackfly_trigger_acquisition::configure_camera_settings()
         ptrTriggerSource->SetIntValue(ptrTriggerSourceSoftware->GetValue());
         cout << "Trigger source set to software." << endl;
 
-        
+        //
         /// Set TriggerSelector to TriggerOverlap
         //
         // *** NOTES ***
@@ -238,6 +239,9 @@ int Blackfly_trigger_acquisition::configure_camera_settings()
     return 0;
 }
 
+///
+///// Send fire trigger signal to camera
+///
 int Blackfly_trigger_acquisition::fire_trigger()
 {
     // make sure the trigger pointer doesnt need to be renewed every frame
@@ -245,6 +249,13 @@ int Blackfly_trigger_acquisition::fire_trigger()
     // cout << "[Blackfly_trigger_acquisition::fire_trigger] fired." << endl;
 }
 
+///
+///// Get image from buffer
+///
+/// Get image pointer from buffer
+/// convert to opencv format image
+/// image is copy to cv_image_
+///
 cv::Mat Blackfly_trigger_acquisition::grab_frame()
 {
     // Retrieve next image
@@ -254,8 +265,6 @@ cv::Mat Blackfly_trigger_acquisition::grab_frame()
     {
         cout << "Image incomplete with image status " << pResultImage->GetImageStatus() << "..." << endl
                 << endl;
-        // cv::Mat empty;
-        // return empty;
     }
     else
     {
@@ -265,45 +274,61 @@ cv::Mat Blackfly_trigger_acquisition::grab_frame()
 
     // Release image
     pResultImage->Release();
-    return cv_image;
+    return cv_image_;
 }
 
-
+///
+////// Convert image pointer to opencv matrix
+///
+/// convert
+/// do some cropping
+/// additional modifcations can be done
+/// image cloned to cv_image
+///
 void Blackfly_trigger_acquisition::convert_to_cv_image(ImagePtr pImage) 
 {
-    ImagePtr convertedImage;
-    convertedImage = pImage->Convert(PixelFormat_BGR8); //, NEAREST_NEIGHBOR);
+
+    ImagePtr convertedImage = pImage->Convert(PixelFormat_BGR8); //, NEAREST_NEIGHBOR);
     unsigned int XPadding = convertedImage->GetXPadding();
     unsigned int YPadding = convertedImage->GetYPadding();
     unsigned int rowsize = convertedImage->GetWidth();
     unsigned int colsize = convertedImage->GetHeight();
 
-
+    /// here is where code can be added to modify image
+    /// remember to change cv_image if modifications are made
     /// image data contains padding. When allocating Mat container size, you need to account for the X,Y image data padding.
     
-    // cv::Mat img;
-    // img = cv::Mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
-    
-    // // crop, cropROI defined in header
-    // img = img(cropROI_);
+    // cv::Mat mat;
+    // mat = cv::Mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
+    cv::Mat mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
 
     // // resize image
-    // cv::resize(img, cv_image, cv_image.size());
-
-    cv::Mat mat = cv::Mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
+    cv::resize(mat(cropROI_), cv_image_, cv_image_.size());
 
     // crop, cropROI defined in header
-    // return mat(cropROI_);
-    cv_image = mat(cropROI_).clone();
-    // cout << "[Blackfly_trigger_acquisition::convert_to_cv_image] image updated." << endl;
-
+    // cv_image_ = mat(cropROI_).clone();
 }
 
+const int Blackfly_trigger_acquisition::cv_image_size()
+{ 
+    return cv_image_size_; 
+}
+
+///
+///// Destructor
+///
 Blackfly_trigger_acquisition::~Blackfly_trigger_acquisition()
 {
     cout << "[Blackfly_trigger_acquisition::~Blackfly_trigger_acquisition] Destructor called." << endl;
 }
 
+///
+///// Camera cleanup
+///
+/// turn trigger mode backoff
+/// set to automatic exposure
+/// de-initialize, release pointer
+///
 int Blackfly_trigger_acquisition::release_camera()
 {   
     try
@@ -370,6 +395,12 @@ int Blackfly_trigger_acquisition::release_camera()
     return 0;
 }
 
+
+///// *** Blackfly_camera_finder ***
+/// Find the blackfly cameras from USB port
+///
+///// Constructor
+///
 Blackfly_camera_finder::Blackfly_camera_finder()
 {
     ///// find cameras
@@ -391,6 +422,11 @@ Blackfly_camera_finder::Blackfly_camera_finder()
     }
 }
 
+///
+///// Destructor
+///
+/// release cameras
+///
 Blackfly_camera_finder::~Blackfly_camera_finder()
 {
     camList.Clear();
@@ -398,48 +434,99 @@ Blackfly_camera_finder::~Blackfly_camera_finder()
     cout << "[Blackfly_camera_finder::~Blackfly_camera_finder] Camera list cleared. System released." << endl;
 }
 
+///
+///// Get the camera by index
+///
 CameraPtr Blackfly_camera_finder::get_camera(int index)
 {
     return camList.GetByIndex(index);
 }
 
+
+///// *** Blackfly_binocular_relay ***
+/// ROS node for relaying images from camera to other nodes
+/// Currently only handles one camera
+/// Modify this for multiple cameras
+///
+///// Constructor
+///
 Blackfly_binocular_relay::Blackfly_binocular_relay(CameraPtr camera_pointer)
     : camera_leftside_(camera_pointer)
 {
     // initialize node
-    string binocular_feed_identifier = "px150/binocular_feed_R";
-    video_feed_pub = n.advertise<cortex_message_handling::BinocularFeed>(binocular_feed_identifier, 1);
+    //
+    // left side
+    string binocular_feed_leftside_identifier = "px150/binocular_feed_leftside_R";
+    // video_feed_leftside_pub_ = n_left_.advertise<sensor_msgs::Image>(binocular_feed_leftside_identifier, 1);
+    // video_feed_leftside_pub_ = transporter_leftside_.advertise(binocular_feed_identifier, 1);
+    
+    
+    // right side
+    // to be added
+
+    /// zmq piping
+    string address_leftside = "ipc:///tmp/binocular_feed_leftside_R";
+    publisher_leftside_.bind(address_leftside);
+
     cout << "[Blackfly_binocular_relay::Blackfly_binocular_relay] Instantiated." << endl;
 }
 
+///
+///// Destructory
+///
 Blackfly_binocular_relay::~Blackfly_binocular_relay()
 {
     cout << "[Blackfly_binocular_relay::~Blackfly_binocular_relay] Relay object terminated." << endl;
 }
 
-int Blackfly_binocular_relay::update_attributes()
-{
-    camera_leftside_.fire_trigger(); 
-    cv::Mat frame = camera_leftside_.grab_frame();
-    cv::imshow( "Display window", frame);  
-    ros::spinOnce();
-    return 0;
-}
 
+// int Blackfly_binocular_relay::update_attributes()
+// {
+//     camera_leftside_.fire_trigger(); 
+//     cv::Mat frame = camera_leftside_.grab_frame();
+//     cv::imshow( "Display window", frame);  
+//     ros::spinOnce();
+//     return 0;
+// }
+
+///
+///// Release camera when finished
+///
+/// remember to add the other cameras when there is more than one
+///
 int Blackfly_binocular_relay::release_cameras()
 {
+    try
+    {
+        publisher_leftside_.close();
+        context_.close();
+    }
+    catch(const exception& e)
+    {
+        cout << "E: cleanup failed " << e.what() << endl;
+    }
+
     camera_leftside_.release_camera();
     return 0; 
 }
 
+void Blackfly_binocular_relay::deallocator(void* data, void* hint)
+{
+    free(data);
+}
+///
+///// single thread node loop
+///
 void Blackfly_binocular_relay::run_singlethread(int rate)
 {
     ros::Rate loop_rate(rate);
     chrono::steady_clock::time_point time_now = chrono::steady_clock::now();
 
     int count = 0;
-
-    while (count < loop_count)
+    
+    
+    // while (count < Loop_count_)
+    while (true)
     {
         // timer
         cout << "loop rate = " 
@@ -449,21 +536,52 @@ void Blackfly_binocular_relay::run_singlethread(int rate)
 
         camera_leftside_.fire_trigger();
         cv::Mat frame = camera_leftside_.grab_frame();
-        cv::imshow("Display window", frame);
 
-        count++;
-    
-        // for opencv
+        /// for opencv
+        cv::imshow("Display window", frame);
         if (cv::waitKey(10) == 27)
         {
-            cout << "[Blackfly_binocular_relay::trigger_thread] exit command." << endl;
+            cout << "[Blackfly_binocular_relay::run_singlethread] exit command." << endl;
             break;
-        }        
+        }  
 
+        
+        // zmq::message_t msg;
+        // void* hint = NULL;
+        // zmq::message_t mess(
+        //     (void*) frame.data, 
+        //     camera_leftside_.cv_image_size(), 
+        //     deallocator,
+        //     hint
+        // )
+        zmq::message_t msg(frame.data, camera_leftside_.cv_image_size());
+        // memcpy(msg.data(), frame.data, camera_leftside_.cv_image_size());
+        
+        bool ret;
+        ret = publisher_leftside_.send(msg, 1);
+        // try
+        // {
+        //     ret = publisher_leftside_.send(msg, 1);
+        // }
+        // catch(const exception& e)
+        // {
+        //     cout << "E: connect failed with error " << e.what() << endl;
+        // }
+        
+        if (!ret)
+        {
+            cout << "[Blackfly_binocular_relay::run_singlethread] publisher send failed." << endl;
+        }
+        cout << "[Blackfly_binocular_relay::run_singlethread] after sent." << endl;
+
+        count++;
         loop_rate.sleep();   
     }  
-
 }
+
+///
+///// multi thread node loop
+///
 void Blackfly_binocular_relay::run_multithread(int rate)
 {
     thread trigger_loop(&Blackfly_binocular_relay::trigger_thread, this, rate);
@@ -473,6 +591,9 @@ void Blackfly_binocular_relay::run_multithread(int rate)
     image_loop.join();
 }
 
+///
+///// trigger loop for multithread
+///
 void Blackfly_binocular_relay::trigger_thread(int rate)
 {
     ros::Rate loop_rate(rate);
@@ -481,11 +602,11 @@ void Blackfly_binocular_relay::trigger_thread(int rate)
     int count = 0;
 
     // wait for image_process_thread to finish initializing
-    while (!start_trigger_loop)
+    while (!start_trigger_loop_)
     {
         this_thread::sleep_for(std::chrono::microseconds(100));
     }
-    while (count < loop_count)
+    while (count < Loop_count_)
     {
         // timer
         cout << "Trigger rate = " 
@@ -509,14 +630,17 @@ void Blackfly_binocular_relay::trigger_thread(int rate)
     cout << "[Blackfly_binocular_relay::trigger_thread] Thread finished." << endl;  
 }
 
+///
+///// image process loop for multithread
+///
 void Blackfly_binocular_relay::image_process_thread(int rate)
 {
     ros::Rate loop_rate(rate);
     chrono::steady_clock::time_point time_now = chrono::steady_clock::now();
 
     int count = 0;
-    start_trigger_loop = true;
-    while (count < loop_count)
+    start_trigger_loop_ = true;
+    while (count < Loop_count_)
     {
         // timer
         // cout << "Framerate = " 
