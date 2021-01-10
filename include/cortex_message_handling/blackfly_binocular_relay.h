@@ -16,12 +16,17 @@ using namespace Spinnaker::GenApi;
 using namespace Spinnaker::GenICam;
 using namespace std;
 
+///
 ///// blackfly_trigger_acquisition.cpp
+///
 class Blackfly_trigger_acquisition
 {
-/// *** attributes ***
-private: 
-    // minimum milliseconds before next image
+/// *** properties ***
+public:
+    int cv_image_size();
+
+protected: 
+    /// camera setting values
     const int grab_image_timeout_ = 1000;
     double exposure_time_ = 5000.0;
 
@@ -32,8 +37,8 @@ private:
 
     /// resize to 512 x 512
     // cv_image_ = cv::Mat(cv::Size(512, 512), CV_8UC3, cv::Scalar(0));
+
     int cv_image_size_ = cv_image_.total() * cv_image_.elemSize();
-    // byte* image_byte_stream;
 
     // blackfly pointers
     CameraPtr pCam_;
@@ -44,7 +49,6 @@ private:
 public:
     Blackfly_trigger_acquisition(CameraPtr camera_pointer);
     Blackfly_trigger_acquisition() = delete;
-    
     ~Blackfly_trigger_acquisition();
 
     int fire_trigger();
@@ -53,10 +57,7 @@ public:
     // cleanup
     int release_camera();
 
-    // access variables
-    const int cv_image_size();
-
-private:
+protected:
     // image format conversion
     void convert_to_cv_image(ImagePtr pImage);
 
@@ -66,7 +67,7 @@ private:
 
 class Blackfly_camera_finder
 {
-/// *** attributes ***
+/// *** properties ***
 private: 
     SystemPtr system;
     CameraList camList;
@@ -79,6 +80,46 @@ public:
 
     CameraPtr get_camera(int index);
 };
+
+class Blackfly_video_relay: public Blackfly_trigger_acquisition
+{
+    static void deallocator(void* data, void* hint);
+/// *** properties ***
+public:
+    string relay_address();
+    bool is_running();
+
+protected:
+    const int Loop_count_ = 1000;
+    bool running_ = false;
+    bool stop_loop_ = false;
+
+    /// ros objects
+    ros::NodeHandle node;
+
+    /// zmq objects
+    string relay_address_ = "ipc:///tmp/blackfly_video_relay";
+    zmq::context_t context_;
+    zmq::socket_t publisher_{context_, zmq::socket_type::pub};
+
+/// *** methods ***
+public:  
+    Blackfly_video_relay() = delete;
+    Blackfly_video_relay(CameraPtr camera_pointer, string address_suffix);
+    ~Blackfly_video_relay();
+
+    void start_acquisition(int rate);
+    void stop_loop();
+};
+
+// class Live_binocular_relay
+// {
+// protected:
+//     int rate;
+
+// public:
+//     Live_binocular_relay(Blackfly_video_relay camera_1)
+// };
 
 class Blackfly_binocular_relay
 {

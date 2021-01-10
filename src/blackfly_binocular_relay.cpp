@@ -7,11 +7,11 @@
 ///// Constructor
 ///
 Blackfly_trigger_acquisition::Blackfly_trigger_acquisition(CameraPtr camera_pointer)
+    : pCam_(camera_pointer)
 {
     cout << "[Blackfly_trigger_acquisition::Blackfly_trigger_acquisition] Instantiating..." << endl;
 
     int result = 0;
-    pCam_ = camera_pointer;
    
     try
     {      
@@ -35,6 +35,16 @@ Blackfly_trigger_acquisition::Blackfly_trigger_acquisition(CameraPtr camera_poin
     cout << "[Blackfly_trigger_acquisition::Blackfly_trigger_acquisition] Instantiated." << endl;
 }
 
+///
+///// Properties
+///
+int Blackfly_trigger_acquisition::cv_image_size()
+{ 
+    return cv_image_size_; 
+}
+
+///
+///// Methods
 ///
 ///// configure camera settings
 ///
@@ -283,7 +293,7 @@ cv::Mat Blackfly_trigger_acquisition::grab_frame()
 /// convert
 /// do some cropping
 /// additional modifcations can be done
-/// image cloned to cv_image
+/// image copied to cv_image_
 ///
 void Blackfly_trigger_acquisition::convert_to_cv_image(ImagePtr pImage) 
 {
@@ -302,16 +312,9 @@ void Blackfly_trigger_acquisition::convert_to_cv_image(ImagePtr pImage)
     // mat = cv::Mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
     cv::Mat mat(colsize + YPadding, rowsize + XPadding, CV_8UC3, convertedImage->GetData(), convertedImage->GetStride());
 
-    // // resize image
+    /// Resize based on size of cv_image_.
+    /// Data is copied to cv_image_.
     cv::resize(mat(cropROI_), cv_image_, cv_image_.size());
-
-    // crop, cropROI defined in header
-    // cv_image_ = mat(cropROI_).clone();
-}
-
-const int Blackfly_trigger_acquisition::cv_image_size()
-{ 
-    return cv_image_size_; 
 }
 
 ///
@@ -319,7 +322,8 @@ const int Blackfly_trigger_acquisition::cv_image_size()
 ///
 Blackfly_trigger_acquisition::~Blackfly_trigger_acquisition()
 {
-    cout << "[Blackfly_trigger_acquisition::~Blackfly_trigger_acquisition] Destructor called." << endl;
+    release_camera();
+    // cout << "[Blackfly_trigger_acquisition::~Blackfly_trigger_acquisition] Destructor called." << endl;
 }
 
 ///
@@ -385,16 +389,23 @@ int Blackfly_trigger_acquisition::release_camera()
     }
     catch (Spinnaker::Exception& e)
     {
-        cout << "Error: " << e.what() << endl;
+        // cout << "Error: " << e.what() << endl;
         return -1;
     }
 
-    pCam_->DeInit();
-    pCam_ = nullptr;
+    try
+    {
+        pCam_->DeInit();
+    }
+    catch (Spinnaker::Exception& e)
+    {
+        // cout << "Error: " << e.what() << endl;
+        return -1;
+    }
+    
     cout << "[Blackfly_trigger_acquisition::release_camera] Cameras released." << endl;
     return 0;
 }
-
 
 ///// *** Blackfly_camera_finder ***
 /// Find the blackfly cameras from USB port
@@ -442,6 +453,136 @@ CameraPtr Blackfly_camera_finder::get_camera(int index)
     return camList.GetByIndex(index);
 }
 
+///// *** Blackfly_video_relay ***
+/// ROS node for relaying images from camera to other nodes
+/// Use ZeroMQ library to improve image sending through IPC
+/// Use ROS library to handle loop
+///
+///// Constructor
+///
+Blackfly_video_relay::Blackfly_video_relay(CameraPtr camera_pointer, string address_suffix)
+    : Blackfly_trigger_acquisition(camera_pointer)
+{
+    /// zmq publisher
+    relay_address_ = relay_address_ + address_suffix;
+    publisher_.setsockopt(ZMQ_CONFLATE, 1);
+    publisher_.bind(relay_address_);
+    cout << "[Blackfly_video_relay::Blackfly_video_relay] Publisher is binded to " << relay_address_ << endl;
+}
+
+///
+///// Properties
+///
+string Blackfly_video_relay::relay_address()
+{
+    return relay_address_;
+}
+
+bool Blackfly_video_relay::is_running()
+{
+    return running_;
+}
+
+///
+///// Methods
+///
+///// Main loop for image acquisition
+///
+/// while running the loop
+/// obtain image from camera
+/// send image through zmq publisher
+void Blackfly_video_relay::start_acquisition(int rate)
+{
+    ros::Rate loop_rate(rate);
+    ros::Time time_now = ros::Time::now();
+    running_ = true;
+    string frame_rate;
+    while (ros::ok() && !stop_loop_)
+    {
+        /// timer
+        frame_rate = "Frame rate : " + to_string(1 / (ros::Time::now() - time_now).toSec()) + " hz";
+        cout << frame_rate << endl;
+        time_now = ros::Time::now();
+
+        // when there are multiple cameras, remove trigger from loop 
+        Blackfly_trigger_acquisition::fire_trigger();
+        Blackfly_trigger_acquisition::grab_frame(); 
+        cv::putText(
+            Blackfly_trigger_acquisition::cv_image_,
+            frame_rate,
+            cv::Point(10, 30),
+            cv::FONT_HERSHEY_DUPLEX,
+            1,
+            CV_RGB(255, 255, 255),
+            2
+        );
+
+        /// for opencv
+        cv::imshow("Display window", Blackfly_trigger_acquisition::cv_image_);
+        if (cv::waitKey(10) == 27)
+        {
+            cout << "[Blackfly_binocular_relay::run_singlethread] exit command." << endl;
+            break;
+        }  
+
+        zmq::message_t msg(Blackfly_trigger_acquisition::cv_image_.data, Blackfly_trigger_acquisition::cv_image_size());
+        // zmq::message_t msg;
+        // zmq::message_t init_msg(
+        //     (void*) Blackfly_trigger_acquisition::cv_image_.data, 
+        //     Blackfly_trigger_acquisition::cv_image_size(),
+        //     Blackfly_video_relay::deallocator
+        // );
+
+        bool ret;
+        ret = publisher_.send(msg, ZMQ_DONTWAIT);
+        // try
+        // {
+        //     ret = publisher_leftside_.send(msg, 1);
+        // }
+        // catch(const exception& e)
+        // {
+        //     cout << "E: connect failed with error " << e.what() << endl;
+        // }
+        
+        if (!ret)
+        {
+            cout << "[Blackfly_video_relay::start_acquisition] publisher send failed." << endl;
+        }
+        // cout << "[Blackfly_video_relay::start_acquisition] after sent." << endl;
+
+        loop_rate.sleep();                 
+    }
+
+    running_ = false;
+}
+
+///
+///// deallocation of image buffer after publisher sends the image
+///
+void Blackfly_video_relay::deallocator(void* data, void* hint)
+{
+    // free(data);
+}
+
+///
+///// Stop the image acquisition loop
+///
+void Blackfly_video_relay::stop_loop()
+{
+    while (!stop_loop_)
+    {
+        stop_loop_ = true;
+    }
+}
+
+///
+///// Destructor
+///
+Blackfly_video_relay::~Blackfly_video_relay()
+{
+    stop_loop();
+    Blackfly_trigger_acquisition::release_camera();
+}
 
 ///// *** Blackfly_binocular_relay ***
 /// ROS node for relaying images from camera to other nodes
