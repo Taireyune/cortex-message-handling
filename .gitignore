@@ -1,4 +1,0 @@
-.vscode/settings.json
-src/video_feed.cpp
-include/cortex_message_handling/video_feed.h
-.gitignore
