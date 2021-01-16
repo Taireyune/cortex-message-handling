@@ -1,7 +1,7 @@
 # Cortex-Message-Handling
 <img 
 src="https://github.com/Taireyune/cortex-message-handling/blob/main/images/communications.png" 
-width="782" height="527" alt="relationship">
+width="500" height="350" alt="relationship">
 
 ## Overview
 This project (ROS workspace) holds some of the messaging scripts for my robotic arm project. The goal is to allow teleops and software controllers to communicate with the simulation and the real version of the robotic arm. These functionalities are all natively available in ROS. However, since I will be using Unity Game Engine and multiple camera feeds for my applications, I have added these code to achieve said connections.
@@ -16,7 +16,7 @@ Since the simulated robot has a few specific messages to pass, this solution is 
 
 <img 
 src="https://github.com/Taireyune/cortex-message-handling/blob/main/images/simulator_robotic_arm_circled.png" 
-width="744" height="767" alt="simulator relationship">
+width="500" height="500" alt="simulator relationship">
 
 ## Trigger acquired video stream
 FLIR Blackfly cameras were used to supply the visual inputs of the real robotic arm. live_binocular_relay.cpp was compiled into an executable to setup the cameras with the appropriate settings and relay the video stream to the agent using ZeroMQ communications.  
@@ -25,7 +25,7 @@ Blackfly cameras can capture using hardware or software triggers with global shu
 
 <img 
 src="https://github.com/Taireyune/cortex-message-handling/blob/main/images/real_robotic_arm_circled.png" 
-width="754" height="753" alt="real arm relationship">
+width="500" height="500" alt="real arm relationship">
 
 ## Why Unity
 Unity is one of the most popular game engines available to the public. It supports development and deployment on Linux which allow for easy interaction with the Robotics and Machine learning tools available in Linux. 
